@@ -1,7 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cargoo_flutter/screens/login_screen.dart';
+import 'package:cargoo_flutter/models/product_category.dart';
+import 'package:cargoo_flutter/screens/ptit_madou_chat_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Supabase.initialize(
+    url: 'https://ejwhbxmfxnrrijqmgjlb.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVqd2hieG1meG5ycmlqcW1namxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMzM5ODIsImV4cCI6MjA4NTcwOTk4Mn0.CLHWDlFQZMh4gB9zmK4ZbSqU68hN9YTYvf2hrMEDNa0',
+  );
+
   runApp(const CargooApp());
 }
 
@@ -16,7 +26,27 @@ class CargooApp extends StatelessWidget {
         primaryColor: const Color(0xFF1B3A5C),
         useMaterial3: true,
       ),
-      home: const HomeScreen(),
+      home: const AuthWrapper(),
+    );
+  }
+}
+
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<AuthState>(
+      stream: Supabase.instance.client.auth.onAuthStateChange,
+      builder: (context, snapshot) {
+        final session = snapshot.data?.session;
+        if (session != null) {
+          return const HomeScreen();
+        }
+        return LoginScreen(
+          onLoginSuccess: () {},
+        );
+      },
     );
   }
 }
@@ -34,8 +64,12 @@ class _HomeScreenState extends State<HomeScreen> {
   int _unreadNotifications = 3;
   int _cartCount = 2;
 
-  final String _firstName = 'Katherine';
-  final String _email = 'katherine@example.com';
+  String _firstName = 'Chargement...';
+  String _lastName = '';
+  String _email = '';
+  String? _userId;
+
+  List<ProductCategory> _categories = [];
 
   final List<Map<String, String>> _drawerMenuItems = [
     {'label': 'Mon compte', 'emoji': '👤'},
@@ -45,13 +79,6 @@ class _HomeScreenState extends State<HomeScreen> {
     {'label': 'Dépannage', 'emoji': '🚨'},
     {'label': 'SAV / Assistance', 'emoji': '🛠️'},
     {'label': 'Appel Service Commercial', 'emoji': '📞'},
-  ];
-
-  final List<Map<String, String>> _categories = [
-    {'name': 'Pneus', 'emoji': '🔧'},
-    {'name': 'Pièces intérieur', 'emoji': '🛞'},
-    {'name': 'Filtres et huile', 'emoji': '⚙️'},
-    {'name': 'Freinage', 'emoji': '🔩'},
   ];
 
   final List<Map<String, dynamic>> _notifications = [
@@ -75,10 +102,65 @@ class _HomeScreenState extends State<HomeScreen> {
     },
   ];
 
-  void _openWhatsApp() async {
-    final Uri url = Uri.parse('https://wa.me/2250141413937');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+    _loadCategories();
+  }
+
+  void _loadUserData() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user != null) {
+        setState(() {
+          _userId = user.id;
+          _email = user.email ?? '';
+        });
+
+        final response = await Supabase.instance.client
+            .from('clients')
+            .select()
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (response != null) {
+          setState(() {
+            _firstName = response['first_name'] ?? response['firstName'] ?? response['prenom'] ?? 'Client';
+            _lastName = response['last_name'] ?? response['lastName'] ?? response['nom'] ?? '';
+          });
+        }
+      }
+    } catch (e) {
+      print('Erreur chargement données client: $e');
+    }
+  }
+
+  void _loadCategories() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('product_categories')
+          .select();
+
+      final categories = (response as List)
+          .map((cat) => ProductCategory.fromJson(cat))
+          .toList();
+
+      setState(() {
+        _categories = categories;
+      });
+    } catch (e) {
+      print('Erreur chargement catégories: $e');
+    }
+  }
+
+  void _logout() async {
+    await Supabase.instance.client.auth.signOut();
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const AuthWrapper()),
+        (route) => false,
+      );
     }
   }
 
@@ -113,10 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () => setState(() => _menuVisible = false),
               child: Container(
                 color: Colors.black.withOpacity(0.5),
-                child: GestureDetector(
-                  onTap: () {},
-                  child: _buildDrawerMenu(),
-                ),
+                child: _buildDrawerMenu(),
               ),
             ),
           if (_notifDropdownVisible)
@@ -132,36 +211,18 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openWhatsApp,
-        backgroundColor: const Color(0xFF25D366),
-        child: const Icon(Icons.message, color: Colors.white),
-      ),
     );
   }
 
   Widget _buildHeader() {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: Colors.grey[300]!),
-        ),
-      ),
+      decoration: BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: Colors.grey[300]!))),
       padding: const EdgeInsets.fromLTRB(20, 54, 20, 14),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          GestureDetector(
-            onTap: () => setState(() => _menuVisible = !_menuVisible),
-            child: const Icon(Icons.menu, size: 24, color: Color(0xFF1A1A1A)),
-          ),
-          Image.asset(
-            'assets/images/logocargo.png',
-            height: 52,
-            width: 180,
-            fit: BoxFit.contain,
-          ),
+          GestureDetector(onTap: () => setState(() => _menuVisible = !_menuVisible), child: const Icon(Icons.menu, size: 24, color: Color(0xFF1A1A1A))),
+          Image.asset('assets/images/logocargo.png', height: 52, width: 180, fit: BoxFit.contain),
           Row(
             children: [
               GestureDetector(
@@ -171,24 +232,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     const Icon(Icons.notifications_none, size: 22, color: Color(0xFF1A1A1A)),
                     if (_unreadNotifications > 0)
                       Positioned(
-                        top: -4,
-                        right: -4,
+                        top: -4, right: -4,
                         child: Container(
                           padding: const EdgeInsets.all(2),
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
+                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                           constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                          child: Text(
-                            _unreadNotifications.toString(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
+                          child: Text('$_unreadNotifications', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                         ),
                       ),
                   ],
@@ -200,24 +249,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Icon(Icons.shopping_cart_outlined, size: 24, color: Color(0xFF1A1A1A)),
                   if (_cartCount > 0)
                     Positioned(
-                      top: -6,
-                      right: -6,
+                      top: -6, right: -6,
                       child: Container(
                         padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFF6B00),
-                          shape: BoxShape.circle,
-                        ),
+                        decoration: const BoxDecoration(color: Color(0xFFFF6B00), shape: BoxShape.circle),
                         constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                        child: Text(
-                          _cartCount.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
+                        child: Text('$_cartCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                       ),
                     ),
                 ],
@@ -235,40 +272,14 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Bonjour $_firstName 👋',
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF1A1A1A),
-            ),
-          ),
+          Text('Bonjour $_firstName 👋', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A))),
           const SizedBox(height: 4),
           RichText(
             text: const TextSpan(
               children: [
-                TextSpan(
-                  text: 'Trouvez uniquement les pièces ',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF666666),
-                  ),
-                ),
-                TextSpan(
-                  text: 'compatibles',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFFFF6B00),
-                    decoration: TextDecoration.underline,
-                  ),
-                ),
-                TextSpan(
-                  text: ' avec votre véhicule',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF666666),
-                  ),
-                ),
+                TextSpan(text: 'Trouvez uniquement les pièces ', style: TextStyle(fontSize: 14, color: Color(0xFF666666))),
+                TextSpan(text: 'compatibles', style: TextStyle(fontSize: 14, color: Color(0xFFFF6B00), decoration: TextDecoration.underline)),
+                TextSpan(text: ' avec votre véhicule', style: TextStyle(fontSize: 14, color: Color(0xFF666666))),
               ],
             ),
           ),
@@ -281,10 +292,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B3A5C),
-        borderRadius: BorderRadius.circular(16),
-      ),
+      decoration: BoxDecoration(color: const Color(0xFF1B3A5C), borderRadius: BorderRadius.circular(16)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -297,59 +305,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF6B00),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
+                      decoration: BoxDecoration(color: const Color(0xFFFF6B00), borderRadius: BorderRadius.circular(20)),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.directions_car, color: Colors.white, size: 14),
-                          SizedBox(width: 4),
-                          Text(
-                            'Véhicule principal',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                        children: [Icon(Icons.directions_car, color: Colors.white, size: 14), SizedBox(width: 4), Text('Véhicule principal', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600))],
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      'HYUNDAI TUCSON',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
+                    const Text('HYUNDAI TUCSON', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
                     const SizedBox(height: 4),
-                    const Text(
-                      '2022 • Essence • 2.5L',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFFBFBFBF),
-                      ),
-                    ),
+                    const Text('2022 • Essence • 2.5L', style: TextStyle(fontSize: 13, color: Color(0xFFBFBFBF))),
                   ],
                 ),
               ),
               const SizedBox(width: 16),
               Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.15),
-                ),
-                child: const Icon(
-                  Icons.directions_car,
-                  size: 64,
-                  color: Colors.white,
-                ),
+                width: 96, height: 96,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.15)),
+                child: const Icon(Icons.directions_car, size: 64, color: Colors.white),
               ),
             ],
           ),
@@ -358,28 +331,19 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF6B00),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6B00), padding: const EdgeInsets.symmetric(vertical: 12)),
                   onPressed: () {},
-                  icon: const Icon(Icons.shopping_bag, size: 16),
-                  label: const Text('Pièces'),
+                  icon: const Icon(Icons.shopping_bag, size: 16, color: Colors.white),
+                  label: const Text('Pièces', style: TextStyle(color: Colors.white)),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFFF6B00)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
+                  style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFFF6B00)), padding: const EdgeInsets.symmetric(vertical: 12)),
                   onPressed: () {},
-                  icon: const Icon(Icons.build, size: 16, color: Color(0xFFFF6B00)),
-                  label: const Text(
-                    'Entretien',
-                    style: TextStyle(color: Color(0xFFFF6B00)),
-                  ),
+                  icon: const Icon(Icons.build, size: 16, color: Colors.white),
+                  label: const Text('Entretien', style: TextStyle(color: Colors.white)),
                 ),
               ),
             ],
@@ -388,15 +352,9 @@ class _HomeScreenState extends State<HomeScreen> {
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Colors.white30),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-              ),
+              style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.white30), padding: const EdgeInsets.symmetric(vertical: 10)),
               onPressed: () {},
-              child: const Text(
-                'Mes Véhicules',
-                style: TextStyle(color: Colors.white),
-              ),
+              child: const Text('Mes Véhicules', style: TextStyle(color: Colors.white)),
             ),
           ),
         ],
@@ -408,10 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
-      ),
+      decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
           const Icon(Icons.lock, color: Color(0xFF1A1A1A), size: 20),
@@ -420,22 +375,9 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Affichage personnalisé',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A1A1A),
-                    fontSize: 14,
-                  ),
-                ),
+                const Text('Affichage personnalisé', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A), fontSize: 14)),
                 const SizedBox(height: 4),
-                Text(
-                  'Seules les pièces compatibles avec votre véhicule sont affichées',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
+                Text('Seules les pièces compatibles avec votre véhicule sont affichées', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
               ],
             ),
           ),
@@ -450,53 +392,30 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Catégories',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF1A1A1A),
-            ),
-          ),
+          const Text('Catégories', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A))),
           const SizedBox(height: 14),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              children: _categories.map((cat) {
-                final emoji = cat['emoji'] ?? '🔧';
-                final name = cat['name'] ?? 'Catégorie';
+              children: _categories.map((category) {
                 return Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: Column(
                     children: [
                       Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Center(
-                          child: Text(
-                            emoji,
-                            style: const TextStyle(fontSize: 32),
-                          ),
-                        ),
+                        width: 72, height: 72,
+                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(16)),
+                        child: category.imageUrl != null
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: Image.network(category.imageUrl!, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.category))),
+                              )
+                            : Container(decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.category)),
                       ),
                       const SizedBox(height: 6),
                       SizedBox(
                         width: 72,
-                        child: Text(
-                          name,
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF333333),
-                          ),
-                        ),
+                        child: Text(category.name, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Color(0xFF333333))),
                       ),
                     ],
                   ),
@@ -514,10 +433,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B3A5C),
-        borderRadius: BorderRadius.circular(16),
-      ),
+      decoration: BoxDecoration(color: const Color(0xFF1B3A5C), borderRadius: BorderRadius.circular(16)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -530,73 +446,27 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF6B00),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.build, color: Colors.white, size: 14),
-                          SizedBox(width: 4),
-                          Text(
-                            'Assistance Mécano',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
+                      decoration: BoxDecoration(color: const Color(0xFFFF6B00), borderRadius: BorderRadius.circular(20)),
+                      child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.build, color: Colors.white, size: 14), SizedBox(width: 4), Text('Assistance Mécano', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600))]),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      'Ptit Madou',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
+                    const Text('Ptit Madou', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
                     const SizedBox(height: 6),
-                    const Text(
-                      'Posez vos questions sur l\'entretien, les pannes ou les pièces.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFFBFBFBF),
-                        height: 1.4,
-                      ),
-                    ),
+                    const Text('Posez vos questions sur l\'entretien, les pannes ou les pièces.', style: TextStyle(fontSize: 13, color: Color(0xFFBFBFBF), height: 1.4)),
                   ],
                 ),
               ),
               const SizedBox(width: 16),
-              Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.15),
-                ),
-                child: const Icon(
-                  Icons.build,
-                  size: 48,
-                  color: Colors.white,
-                ),
-              ),
+              Container(width: 96, height: 96, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.15)), child: const Icon(Icons.build, size: 48, color: Colors.white)),
             ],
           ),
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF6B00),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              onPressed: () {},
-              child: const Text('Discuter avec Ptit Madou'),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6B00), padding: const EdgeInsets.symmetric(vertical: 12)),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PtitMadouChatScreen())),
+              child: const Text('Discuter avec Ptit Madou', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
@@ -608,27 +478,17 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey[300]!),
-        borderRadius: BorderRadius.circular(16),
-      ),
+      decoration: BoxDecoration(border: Border.all(color: Colors.grey[300]!), borderRadius: BorderRadius.circular(16)),
       child: Column(
         children: [
-          const Text(
-            'Pourquoi choisir CarGoo ?',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF1A1A1A),
-            ),
-          ),
+          const Text('Pourquoi choisir CarGoo ?', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A))),
           const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildWhyItem('✓', 'Pièces 100%\ncompatibles'),
-              _buildWhyItem('✓', 'Qualité\ngarantie'),
-              _buildWhyItem('✓', 'Livraison\nrapide'),
+              _buildWhyItem(Icons.verified_user, 'Pièces 100%\ncompatibles'),
+              _buildWhyItem(Icons.shield, 'Qualité\ngarantie'),
+              _buildWhyItem(Icons.local_shipping, 'Livraison\nrapide'),
             ],
           ),
         ],
@@ -636,42 +496,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildWhyItem(String icon, String text) {
+  Widget _buildWhyItem(IconData icon, String text) {
     return Column(
       children: [
         DecoratedBox(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xFFFFF3E8),
-          ),
+          decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFFFFF3E8)),
           child: SizedBox(
-            width: 48,
-            height: 48,
-            child: Center(
-              child: Text(
-                icon,
-                style: const TextStyle(
-                  fontSize: 24,
-                  color: Color(0xFFFF6B00),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
+            width: 48, height: 48,
+            child: Center(child: Icon(icon, size: 24, color: const Color(0xFFFF6B00))),
           ),
         ),
         const SizedBox(height: 8),
         SizedBox(
           width: 80,
-          child: Text(
-            text,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF333333),
-              height: 1.3,
-            ),
-          ),
+          child: Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF333333), height: 1.3)),
         ),
       ],
     );
@@ -681,11 +519,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        width: 280,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-        ),
+        width: 280, height: double.infinity,
+        decoration: const BoxDecoration(color: Colors.white),
         child: Column(
           children: [
             Padding(
@@ -693,36 +528,17 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Menu',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFFF6B00),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => setState(() => _menuVisible = false),
-                    child: const Text(
-                      '✕',
-                      style: TextStyle(fontSize: 28, color: Colors.grey),
-                    ),
-                  ),
+                  const Text('Menu', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFFFF6B00))),
+                  GestureDetector(onTap: () => setState(() => _menuVisible = false), child: const Text('✕', style: TextStyle(fontSize: 28, color: Colors.grey))),
                 ],
               ),
             ),
             Expanded(
               child: ListView(
                 children: [
-                  ..._drawerMenuItems.map((item) {
-                    return _buildDrawerMenuItem(
-                      item['emoji'] ?? '📌',
-                      item['label'] ?? 'Menu',
-                      false,
-                    );
-                  }).toList(),
+                  ..._drawerMenuItems.map((item) => _buildDrawerMenuItem(item['emoji'] ?? '📌', item['label'] ?? 'Menu', false)).toList(),
                   Divider(color: Colors.grey[300], height: 16),
-                  _buildDrawerMenuItem('🚪', 'Déconnexion', false, isLogout: true),
+                  _buildDrawerMenuItem('🚪', 'Déconnexion', false, isLogout: true, onTap: _logout),
                 ],
               ),
             ),
@@ -732,14 +548,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildDrawerMenuItem(
-    String emoji,
-    String label,
-    bool disabled, {
-    bool isLogout = false,
-  }) {
+  Widget _buildDrawerMenuItem(String emoji, String label, bool disabled, {bool isLogout = false, VoidCallback? onTap}) {
     return GestureDetector(
-      onTap: disabled ? null : () => setState(() => _menuVisible = false),
+      onTap: disabled ? null : (onTap ?? () => setState(() => _menuVisible = false)),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Row(
@@ -747,22 +558,9 @@ class _HomeScreenState extends State<HomeScreen> {
             Text(emoji, style: const TextStyle(fontSize: 24)),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: isLogout ? FontWeight.w600 : FontWeight.w500,
-                  color: isLogout
-                      ? const Color(0xFFFF6B00)
-                      : (disabled ? Colors.grey : const Color(0xFF333333)),
-                ),
-              ),
+              child: Text(label, style: TextStyle(fontSize: 16, fontWeight: isLogout ? FontWeight.w600 : FontWeight.w500, color: isLogout ? const Color(0xFFFF6B00) : (disabled ? Colors.grey : const Color(0xFF333333)))),
             ),
-            Icon(
-              Icons.chevron_right,
-              color: disabled ? Colors.grey : Colors.grey[600],
-              size: 20,
-            ),
+            Icon(Icons.chevron_right, color: disabled ? Colors.grey : Colors.grey[600], size: 20),
           ],
         ),
       ),
@@ -776,13 +574,7 @@ class _HomeScreenState extends State<HomeScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 24, offset: const Offset(0, 8))],
       ),
       child: Column(
         children: [
@@ -791,32 +583,16 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Notifications',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1A1A1A),
-                  ),
-                ),
+                const Text('Notifications', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A))),
                 if (_unreadNotifications > 0)
                   GestureDetector(
                     onTap: () {
                       setState(() {
                         _unreadNotifications = 0;
-                        for (var notif in _notifications) {
-                          notif['isRead'] = true;
-                        }
+                        for (var notif in _notifications) notif['isRead'] = true;
                       });
                     },
-                    child: const Text(
-                      'Tout lire',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFFFF6B00),
-                      ),
-                    ),
+                    child: const Text('Tout lire', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFFFF6B00))),
                   ),
               ],
             ),
@@ -836,76 +612,30 @@ class _HomeScreenState extends State<HomeScreen> {
                     });
                   },
                   child: Container(
-                    color: notif['isRead'] == true
-                        ? Colors.white
-                        : const Color(0xFFFFF9F4),
+                    color: notif['isRead'] == true ? Colors.white : const Color(0xFFFFF9F4),
                     padding: const EdgeInsets.all(14),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         DecoratedBox(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: notif['isRead'] == true
-                                ? Colors.grey[200]!
-                                : const Color(0xFFFFF3E8),
-                          ),
-                          child: const SizedBox(
-                            width: 34,
-                            height: 34,
-                            child: Icon(
-                              Icons.shopping_bag,
-                              size: 18,
-                              color: Color(0xFFFF6B00),
-                            ),
-                          ),
+                          decoration: BoxDecoration(shape: BoxShape.circle, color: notif['isRead'] == true ? Colors.grey[200]! : const Color(0xFFFFF3E8)),
+                          child: const SizedBox(width: 34, height: 34, child: Icon(Icons.shopping_bag, size: 18, color: Color(0xFFFF6B00))),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                notif['title'] ?? 'Notification',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: notif['isRead'] == true
-                                      ? FontWeight.w500
-                                      : FontWeight.w700,
-                                  color: const Color(0xFF333333),
-                                ),
-                              ),
+                              Text(notif['title'] ?? 'Notification', style: TextStyle(fontSize: 13, fontWeight: notif['isRead'] == true ? FontWeight.w500 : FontWeight.w700, color: const Color(0xFF333333))),
                               const SizedBox(height: 2),
-                              Text(
-                                notif['message'] ?? '',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF666666),
-                                ),
-                              ),
+                              Text(notif['message'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Color(0xFF666666))),
                               const SizedBox(height: 4),
-                              Text(
-                                notif['time'] ?? '',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF999999),
-                                ),
-                              ),
+                              Text(notif['time'] ?? '', style: const TextStyle(fontSize: 11, color: Color(0xFF999999))),
                             ],
                           ),
                         ),
                         if (notif['isRead'] == false)
-                          Container(
-                            width: 7,
-                            height: 7,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Color(0xFFFF6B00),
-                            ),
-                            margin: const EdgeInsets.only(top: 5, left: 8),
-                          ),
+                          Container(width: 7, height: 7, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFFF6B00)), margin: const EdgeInsets.only(top: 5, left: 8)),
                       ],
                     ),
                   ),
@@ -916,17 +646,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Divider(color: Colors.grey[300], height: 1),
           GestureDetector(
             onTap: () => setState(() => _notifDropdownVisible = false),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                'Voir toutes les notifications',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFFFF6B00),
-                ),
-              ),
-            ),
+            child: const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('Voir toutes les notifications', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFFFF6B00)))),
           ),
         ],
       ),
