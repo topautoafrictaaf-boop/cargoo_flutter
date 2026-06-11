@@ -38,13 +38,13 @@ class _HomeScreenState extends State<HomeScreen> {
   final String _email = 'katherine@example.com';
 
   final List<Map<String, String>> _drawerMenuItems = [
-    {'label': 'Mon compte', 'emoji': '👤', 'disabled': 'false'},
-    {'label': 'Mes véhicules', 'emoji': '🚗', 'disabled': 'false'},
-    {'label': 'Mes pièces auto', 'emoji': '🧩', 'disabled': 'false'},
-    {'label': 'Mes commandes', 'emoji': '🧾', 'disabled': 'false'},
-    {'label': 'Dépannage', 'emoji': '🚨', 'disabled': 'true'},
-    {'label': 'SAV / Assistance', 'emoji': '🛠️', 'disabled': 'false'},
-    {'label': 'Appel Service Commercial', 'emoji': '📞', 'disabled': 'false'},
+    {'label': 'Mon compte', 'emoji': '👤'},
+    {'label': 'Mes véhicules', 'emoji': '🚗'},
+    {'label': 'Mes pièces auto', 'emoji': '🧩'},
+    {'label': 'Mes commandes', 'emoji': '🧾'},
+    {'label': 'Dépannage', 'emoji': '🚨'},
+    {'label': 'SAV / Assistance', 'emoji': '🛠️'},
+    {'label': 'Appel Service Commercial', 'emoji': '📞'},
   ];
 
   final List<Map<String, String>> _categories = [
@@ -142,13 +142,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildHeader() {
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(20, 54, 20, 14),
       decoration: BoxDecoration(
+        color: Colors.white,
         border: Border(
           bottom: BorderSide(color: Colors.grey[300]!),
         ),
       ),
+      padding: const EdgeInsets.fromLTRB(20, 54, 20, 14),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -639,20 +639,22 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildWhyItem(String icon, String text) {
     return Column(
       children: [
-        Container(
-          width: 48,
-          height: 48,
+        DecoratedBox(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: const Color(0xFFFFF3E8),
           ),
-          child: Center(
-            child: Text(
-              icon,
-              style: const TextStyle(
-                fontSize: 24,
-                color: Color(0xFFFF6B00),
-                fontWeight: FontWeight.bold,
+          child: SizedBox(
+            width: 48,
+            height: 48,
+            child: Center(
+              child: Text(
+                icon,
+                style: const TextStyle(
+                  fontSize: 24,
+                  color: Color(0xFFFF6B00),
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
@@ -681,7 +683,9 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Container(
         width: 280,
         height: double.infinity,
-        color: Colors.white,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+        ),
         child: Column(
           children: [
             Padding(
@@ -711,11 +715,10 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ListView(
                 children: [
                   ..._drawerMenuItems.map((item) {
-                    final disabled = item['disabled'] == 'true';
                     return _buildDrawerMenuItem(
                       item['emoji'] ?? '📌',
                       item['label'] ?? 'Menu',
-                      disabled,
+                      false,
                     );
                   }).toList(),
                   Divider(color: Colors.grey[300], height: 16),
@@ -840,19 +843,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: 34,
-                          height: 34,
+                        DecoratedBox(
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: notif['isRead'] == true
-                                ? Colors.grey[200]
+                                ? Colors.grey[200]!
                                 : const Color(0xFFFFF3E8),
                           ),
-                          child: const Icon(
-                            Icons.shopping_bag,
-                            size: 18,
-                            color: Color(0xFFFF6B00),
+                          child: const SizedBox(
+                            width: 34,
+                            height: 34,
+                            child: Icon(
+                              Icons.shopping_bag,
+                              size: 18,
+                              color: Color(0xFFFF6B00),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 10),
