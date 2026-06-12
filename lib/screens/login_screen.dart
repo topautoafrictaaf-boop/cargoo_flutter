@@ -127,7 +127,6 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (mounted) {
-        // Essayer de se connecter automatiquement
         try {
           await Supabase.instance.client.auth.signInWithPassword(
             email: email,
@@ -135,7 +134,6 @@ class _LoginScreenState extends State<LoginScreen> {
           );
           widget.onLoginSuccess();
         } catch (_) {
-          // Si c'est échoué, afficher login pour se connecter
           setState(() {
             _isLogin = true;
             _passwordController.clear();
@@ -173,13 +171,13 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
         child: Column(
           children: [
-            // Hero Image
             Container(
               width: double.infinity,
               height: 300,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Colors.white,
               ),
               child: Image.asset(
@@ -188,7 +186,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
 
-            // Welcome Section
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Column(
@@ -227,7 +224,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
 
-            // Tab Switcher
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
               child: Container(
@@ -346,12 +342,10 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
 
-            // Form Section
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 children: [
-                  // Error Message
                   if (_error != null)
                     Container(
                       padding: const EdgeInsets.all(14),
@@ -373,7 +367,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
 
-                  // First Name (Signup only)
                   if (!_isLogin)
                     Container(
                       margin: const EdgeInsets.only(bottom: 14),
@@ -412,7 +405,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
 
-                  // Last Name (Signup only)
                   if (!_isLogin)
                     Container(
                       margin: const EdgeInsets.only(bottom: 14),
@@ -451,7 +443,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
 
-                  // Phone
                   Container(
                     margin: const EdgeInsets.only(bottom: 14),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -499,7 +490,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
 
-                  // Phone Confirm (Signup only)
                   if (!_isLogin)
                     Container(
                       margin: const EdgeInsets.only(bottom: 14),
@@ -548,7 +538,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
 
-                  // Password
                   Container(
                     margin: const EdgeInsets.only(bottom: 14),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -598,7 +587,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
 
-                  // Password Confirm (Signup only)
                   if (!_isLogin)
                     Container(
                       margin: const EdgeInsets.only(bottom: 14),
@@ -650,7 +638,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
 
-                  // Forgot Password (Login only)
                   if (_isLogin)
                     Align(
                       alignment: Alignment.centerRight,
@@ -667,7 +654,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
 
-                  // Action Button
                   Container(
                     height: 58,
                     margin: const EdgeInsets.only(bottom: 24),
@@ -726,7 +712,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
 
-                  // Terms
                   Padding(
                     padding: const EdgeInsets.only(bottom: 40),
                     child: Column(

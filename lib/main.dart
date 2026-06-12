@@ -174,6 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
               _buildHeader(),
               Expanded(
                 child: SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -330,20 +331,32 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             children: [
               Expanded(
-                child: ElevatedButton.icon(
+                child: ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6B00), padding: const EdgeInsets.symmetric(vertical: 12)),
                   onPressed: () {},
-                  icon: const Icon(Icons.shopping_bag, size: 16, color: Colors.white),
-                  label: const Text('Pièces', style: TextStyle(color: Colors.white)),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.shopping_bag, size: 16, color: Colors.white),
+                      SizedBox(width: 8),
+                      Text('Pièces', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: OutlinedButton.icon(
+                child: OutlinedButton(
                   style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFFF6B00)), padding: const EdgeInsets.symmetric(vertical: 12)),
                   onPressed: () {},
-                  icon: const Icon(Icons.build, size: 16, color: Colors.white),
-                  label: const Text('Entretien', style: TextStyle(color: Colors.white)),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.build, size: 16, color: Colors.white),
+                      SizedBox(width: 8),
+                      Text('Entretien', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -396,6 +409,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 14),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
+            physics: const ClampingScrollPhysics(),
             child: Row(
               children: _categories.map((category) {
                 return Padding(
@@ -535,6 +549,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             Expanded(
               child: ListView(
+                physics: const ClampingScrollPhysics(),
                 children: [
                   ..._drawerMenuItems.map((item) => _buildDrawerMenuItem(item['emoji'] ?? '📌', item['label'] ?? 'Menu', false)).toList(),
                   Divider(color: Colors.grey[300], height: 16),
@@ -600,6 +615,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Divider(color: Colors.grey[300], height: 1),
           Expanded(
             child: ListView.separated(
+              physics: const ClampingScrollPhysics(),
               itemCount: _notifications.length,
               separatorBuilder: (_, __) => Divider(color: Colors.grey[300], height: 1),
               itemBuilder: (context, index) {
